@@ -1,0 +1,9 @@
+fastapi
+pydantic
+uvicorn
+requests
+ctransformers
+spotipy
+motor
+pymongo
+python-dotenv
