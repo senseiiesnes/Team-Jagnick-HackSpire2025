@@ -86,6 +86,7 @@ export async function POST(request: NextRequest) {
     
     // For new chats, create a document in MongoDB
     if (newChat || !chatId) {
+      console.log("Creating new chat document");
       const newChatDoc = {
         user_id: userId,
         messages: [
@@ -99,97 +100,133 @@ export async function POST(request: NextRequest) {
       const result = await db.collection('chats').insertOne(newChatDoc);
       chat_id = result.insertedId.toString();
     } else {
-      // For existing chats, add the new message
-      await db.collection('chats').updateOne(
-        { _id: new ObjectId(chatId), user_id: userId },
-        { 
-          $push: { messages: { role: 'user', content: message, timestamp: now } },
-          $set: { updatedAt: now }
-        }
-      );
+      // For existing chats, find the chat and add the new message
+      console.log(`Updating existing chat: ${chatId}`);
+      const existingChat = await db.collection('chats').findOne({ 
+        _id: new ObjectId(chatId),
+        user_id: userId
+      });
+      
+      if (!existingChat) {
+        // If the chat doesn't exist (maybe it was deleted), create a new one
+        console.log("Chat not found, creating new document");
+        const newChatDoc = {
+          user_id: userId,
+          messages: [
+            { role: 'user', content: message, timestamp: now }
+          ],
+          createdAt: now,
+          updatedAt: now,
+          ended: false
+        };
+        
+        const result = await db.collection('chats').insertOne(newChatDoc);
+        chat_id = result.insertedId.toString();
+      } else {
+        // Update the existing chat
+        await db.collection('chats').updateOne(
+          { _id: new ObjectId(chatId), user_id: userId },
+          { 
+            $push: { messages: { role: 'user', content: message, timestamp: now } },
+            $set: { updatedAt: now }
+          }
+        );
+      }
     }
     
-    // Call the FastAPI backend
-    const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
-    let aiResponse;
-
+    // Call backend API to get AI response
     try {
-      const backendResponse = await fetch(`${BACKEND_URL}/chat/message`, {
+      // Use a fallback URL if BACKEND_URL is not defined
+      const backendUrl = process.env.BACKEND_URL || 'http://localhost:8000';
+      console.log(`Connecting to backend at: ${backendUrl}`);
+      
+      // Call backend with message and user ID
+      const response = await fetch(`${backendUrl}/chat/message`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          user_id: userId,
           text: message,
-          user_name: session.user.name || 'User'
-        })
+          user_id: userId,
+        }),
       });
       
-      if (!backendResponse.ok) {
-        console.error(`Backend error: ${backendResponse.statusText}`);
-        // Fall back to a simple echo response if backend is unavailable
-        aiResponse = {
-          user_id: userId,
-          assistant_message: "I'm sorry, I couldn't process your message right now. The AI service is temporarily unavailable. Your message has been saved and will be processed when the service is back online.",
-          conversation_ended: false,
-          feeling_better_acknowledged: false,
-          current_significant_emotions: ["neutral"]
-        };
-      } else {
-        aiResponse = await backendResponse.json();
-      }
-    } catch (error) {
-      console.error('Error connecting to backend:', error);
-      // Fall back to a simple response if backend connection fails
-      aiResponse = {
-        user_id: userId,
-        assistant_message: "I'm sorry, I couldn't connect to the AI service. Your message has been saved and will be processed when the connection is restored.",
-        conversation_ended: false,
-        feeling_better_acknowledged: false,
-        current_significant_emotions: ["neutral"]
-      };
-    }
-    
-    // Add the AI response to the chat in MongoDB
-    await db.collection('chats').updateOne(
-      { _id: new ObjectId(chat_id) },
-      { 
-        $push: { 
-          messages: { 
-            role: 'assistant', 
-            content: aiResponse.assistant_message, 
-            timestamp: now,
-            significant_emotions: aiResponse.current_significant_emotions || []
-          }
-        },
-        $set: { 
-          updatedAt: now,
-          ended: aiResponse.conversation_ended || false,
-          feeling_better: aiResponse.feeling_better_acknowledged || false
+      if (!response.ok) {
+        console.error('Backend error:', response.status, response.statusText);
+        if (response.status === 503) {
+          throw new Error('Backend service unavailable');
+        } else if (response.status === 401) {
+          throw new Error('Unauthorized');
+        } else {
+          throw new Error(`Backend error: ${response.status}`);
         }
       }
-    );
-    
-    // Prepare recommendations if any
-    let recommendations = null;
-    if (aiResponse.recommendations) {
-      recommendations = aiResponse.recommendations;
+
+      const apiResponse = await response.json();
+      
+      const aiMessage = {
+        role: 'assistant',
+        content: apiResponse.assistant_message.replace(/^AI: /, ''),
+        timestamp: new Date(),
+        recommendations: apiResponse.recommendations || null,
+        significant_emotions: apiResponse.current_significant_emotions || null,
+        feels_better: apiResponse.feeling_better_acknowledged || false,
+      };
+      
+      // Add the AI response to the chat document
+      await db.collection('chats').updateOne(
+        { _id: new ObjectId(chat_id) },
+        { 
+          $push: { messages: aiMessage },
+          $set: { 
+            updatedAt: new Date(),
+            ended: apiResponse.conversation_ended || false
+          }
+        }
+      );
+      
+      return NextResponse.json({
+        message: aiMessage,
+        chatId: chat_id
+      });
+      
+    } catch (error) {
+      console.error('Error calling backend:', error);
+      
+      // Update the chat document to mark that there was an error
+      if (chat_id) {
+        const errorMessage = {
+          role: 'system',
+          content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          timestamp: new Date(),
+        };
+        
+        await db.collection('chats').updateOne(
+          { _id: new ObjectId(chat_id) },
+          { 
+            $push: { messages: errorMessage },
+            $set: { updatedAt: new Date() }
+          }
+        );
+      }
+      
+      if (error instanceof Error && error.message === 'Backend service unavailable') {
+        return NextResponse.json(
+          { error: 'AI service is temporarily unavailable. Please try again later.' },
+          { status: 503 }
+        );
+      }
+      
+      return NextResponse.json(
+        { error: 'Failed to get response from AI' },
+        { status: 500 }
+      );
     }
-    
-    return NextResponse.json({
-      chat_id,
-      assistant_message: aiResponse.assistant_message,
-      conversation_ended: aiResponse.conversation_ended || false,
-      feeling_better_acknowledged: aiResponse.feeling_better_acknowledged || false,
-      recommendations,
-      current_significant_emotions: aiResponse.current_significant_emotions || []
-    });
-    
   } catch (error) {
     console.error('Error in chat API:', error);
     return NextResponse.json(
-      { error: 'Failed to process message' },
+      { error: 'Something went wrong' },
       { status: 500 }
     );
   }

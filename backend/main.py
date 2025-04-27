@@ -106,6 +106,7 @@ async def handle_chat_message(message_input: ChatMessageInput = Body(...)):
 
     # Access initialized LLM and SP clients from globals
     global llm, sp
+    global conversations
 
     # Now using the MockLLM fallback, this should never be None
     if not llm:
@@ -117,7 +118,7 @@ async def handle_chat_message(message_input: ChatMessageInput = Body(...)):
             current_significant_emotions=["neutral"]
         )
 
-    # --- Get or Initialize Conversation State ---
+    # --- Initialize or retrieve conversation state ---
     if user_id not in conversations:
         logging.info(f"Starting new conversation for user_id: {user_id}")
         try:
@@ -137,87 +138,72 @@ async def handle_chat_message(message_input: ChatMessageInput = Body(...)):
             "name": user_name,
             "feeling_better_flag": False
         }
-        state = conversations[user_id]
-
-        try:
-             assistant_reply = generate_followup_question(state["current_significant_emotions"], state["history"], llm=llm)
-        except Exception as e:
-             logging.error(f"Follow-up question generation failed for user {user_id}: {e}")
-             raise HTTPException(status_code=500, detail="Failed to generate chat response.")
-
-        state["history"].append({"role": "assistant", "content": assistant_reply})
-
-        return ChatResponse(
-            user_id=user_id,
-            assistant_message=assistant_reply,
-            conversation_ended=False,
-            current_significant_emotions=state["current_significant_emotions"]
-        )
-
     else:
-        # --- Subsequent message ---
+        # Continuing existing conversation
+        logging.info(f"Continuing conversation for user_id: {user_id}")
         state = conversations[user_id]
-        logging.info(f"Continuing conversation for user_id: {user_id}, round: {state['rounds']}")
         state["history"].append({"role": "user", "content": user_text})
         state["rounds"] += 1
 
-        # --- Check for End Conditions ---
-        assistant_reply = ""
-        conversation_ended = False
-        feeling_better_acknowledged = False
-        recommendations_obj = None # Use different name to avoid conflict with module
+    # Access the current conversation state
+    state = conversations[user_id]
 
-        if user_text.lower() in ["exit", "quit", "bye", "stop"]:
-            assistant_reply = f"Okay {state['name']}, ending our chat here. Take care!"
-            conversation_ended = True
-        elif any(phrase in user_text.lower() for phrase in ["feel better", "good now", "happy now", "relaxed now", "yes i feel better", "yes", "improved", "calmer"]):
-            assistant_reply = f"That's wonderful to hear, {state['name']}! I'm glad our chat helped a bit. 😊"
-            conversation_ended = True
-            feeling_better_acknowledged = True
-            state["feeling_better_flag"] = True
-        elif state["rounds"] >= MAX_CHAT_ROUNDS:
-            assistant_reply = f"We've chatted for a bit, {state['name']}. Remember I'm here if you need to talk more later. Let me know if you'd like some recommendations based on how you felt initially."
-            conversation_ended = True
+    # --- Check for End Conditions ---
+    assistant_reply = ""
+    conversation_ended = False
+    feeling_better_acknowledged = False
+    recommendations_obj = None # Use different name to avoid conflict with module
 
-        # --- Generate Next Follow-up (if chat continues) ---
-        if not conversation_ended:
-            try:
-                 assistant_reply = generate_followup_question(state["current_significant_emotions"], state["history"], llm=llm)
-            except Exception as e:
-                 logging.error(f"Follow-up question generation failed for user {user_id}: {e}")
-                 raise HTTPException(status_code=500, detail="Failed to generate chat response.")
-            state["history"].append({"role": "assistant", "content": assistant_reply})
+    if user_text.lower() in ["exit", "quit", "bye", "stop"]:
+        assistant_reply = f"Okay {state['name']}, ending our chat here. Take care!"
+        conversation_ended = True
+    elif any(phrase in user_text.lower() for phrase in ["feel better", "good now", "happy now", "relaxed now", "yes i feel better", "yes", "improved", "calmer"]):
+        assistant_reply = f"That's wonderful to hear, {state['name']}! I'm glad our chat helped a bit. 😊"
+        conversation_ended = True
+        feeling_better_acknowledged = True
+        state["feeling_better_flag"] = True
+    elif state["rounds"] >= MAX_CHAT_ROUNDS:
+        assistant_reply = f"We've chatted for a bit, {state['name']}. Remember I'm here if you need to talk more later. Let me know if you'd like some recommendations based on how you felt initially."
+        conversation_ended = True
 
-        # --- Generate Recommendations if Conversation Ended ---
-        if conversation_ended:
-            try:
-                # Call recommendation function from logic, passing sp
-                recommendations_data = generate_recommendations(state["initial_significant_emotions"], sp=sp)
-                recommendations_obj = RecommendationOutput(**recommendations_data) # Create Pydantic obj
-                if assistant_reply: assistant_reply += "\n\nBased on how you were feeling, here are some ideas:"
-                else: assistant_reply = "Based on how you were feeling, here are some ideas:"
-            except Exception as e:
-                logging.error(f"Recommendation generation failed for user {user_id}: {e}")
-                if assistant_reply: assistant_reply += "\n\n(Sorry, couldn't fetch recommendations right now.)"
-                else: assistant_reply = "Okay, ending chat. (Sorry, couldn't fetch recommendations right now.)"
+    # --- Generate response based on conversation state ---
+    if not conversation_ended:
+        try:
+            assistant_reply = generate_followup_question(state["current_significant_emotions"], state["history"], llm=llm)
+        except Exception as e:
+            logging.error(f"Follow-up question generation failed for user {user_id}: {e}")
+            raise HTTPException(status_code=500, detail="Failed to generate chat response.")
+        state["history"].append({"role": "assistant", "content": assistant_reply})
 
-            # --- Clean up state for ended conversation ---
-            if user_id in conversations: # Check if key exists before deleting
-                 del conversations[user_id]
-                 logging.info(f"Conversation ended and state cleared for user_id: {user_id}")
-            else:
-                 logging.warning(f"Attempted to delete state for user_id {user_id}, but it was already removed.")
+    # --- Generate Recommendations if Conversation Ended ---
+    if conversation_ended:
+        try:
+            # Call recommendation function from logic, passing sp
+            recommendations_data = generate_recommendations(state["initial_significant_emotions"], sp=sp)
+            recommendations_obj = RecommendationOutput(**recommendations_data) # Create Pydantic obj
+            if assistant_reply: assistant_reply += "\n\nBased on how you were feeling, here are some ideas:"
+            else: assistant_reply = "Based on how you were feeling, here are some ideas:"
+        except Exception as e:
+            logging.error(f"Recommendation generation failed for user {user_id}: {e}")
+            if assistant_reply: assistant_reply += "\n\n(Sorry, couldn't fetch recommendations right now.)"
+            else: assistant_reply = "Okay, ending chat. (Sorry, couldn't fetch recommendations right now.)"
 
+        # --- Clean up state for ended conversation ---
+        if user_id in conversations: # Check if key exists before deleting
+            del conversations[user_id]
+            logging.info(f"Conversation ended and state cleared for user_id: {user_id}")
+        else:
+            logging.warning(f"Attempted to delete state for user_id {user_id}, but it was already removed.")
 
-        # --- Return Response ---
-        return ChatResponse(
-            user_id=user_id,
-            assistant_message=assistant_reply,
-            conversation_ended=conversation_ended,
-            feeling_better_acknowledged=feeling_better_acknowledged,
-            recommendations=recommendations_obj, # Assign Pydantic obj here
-            current_significant_emotions=state.get("current_significant_emotions")
-        )
+    # --- Return Response ---
+    return ChatResponse(
+        user_id=user_id,
+        assistant_message=assistant_reply,
+        conversation_ended=conversation_ended,
+        feeling_better_acknowledged=feeling_better_acknowledged,
+        recommendations=recommendations_obj, # Assign Pydantic obj here
+        current_significant_emotions=state.get("current_significant_emotions")
+    )
 
 
 # === Root Endpoint ===

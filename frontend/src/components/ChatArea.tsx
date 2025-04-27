@@ -35,9 +35,12 @@ const ChatArea: React.FC<ChatAreaProps> = ({ chatId, onClose, isFocused }) => {
   const [error, setError] = useState<string | null>(null);
   const { data: session } = useSession();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [currentChatId, setCurrentChatId] = useState<string | undefined>(chatId);
 
   // Load chat history if chatId is provided
   useEffect(() => {
+    setCurrentChatId(chatId);
+    
     if (chatId && chatId !== 'new') {
       const fetchChatHistory = async () => {
         setIsLoading(true);
@@ -109,8 +112,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({ chatId, onClose, isFocused }) => {
         },
         body: JSON.stringify({
           message: newMessage,
-          chatId: chatId !== 'new' ? chatId : undefined,
-          newChat: chatId === 'new' || !chatId
+          chatId: currentChatId !== 'new' ? currentChatId : undefined,
+          newChat: currentChatId === 'new' || !currentChatId
         }),
       });
       
@@ -127,15 +130,29 @@ const ChatArea: React.FC<ChatAreaProps> = ({ chatId, onClose, isFocused }) => {
       
       const data = await response.json();
       
+      if (data.error) {
+        throw new Error(data.error);
+      }
+      
+      // Get the message content from the response
+      let messageContent = '';
+      if (data.message && data.message.content) {
+        messageContent = data.message.content;
+      } else if (data.assistant_message) {
+        messageContent = data.assistant_message;
+      }
+      
       // Remove recommendation text from the message display if present
-      let cleanedText = data.assistant_message;
+      let cleanedText = messageContent;
       if (data.recommendations && cleanedText.includes("Based on how you were feeling, here are some ideas:")) {
         cleanedText = cleanedText.split("Based on how you were feeling, here are some ideas:")[0].trim();
       }
       
       // Transform recommendations data to match our UI format
       let recommendationsForUI: RecommendationSet | undefined = undefined;
-      if (data.recommendations) {
+      if (data.message && data.message.recommendations) {
+        recommendationsForUI = data.message.recommendations;
+      } else if (data.recommendations) {
         recommendationsForUI = {
           meditation: {
             title: "Meditation for You",
@@ -158,6 +175,14 @@ const ChatArea: React.FC<ChatAreaProps> = ({ chatId, onClose, isFocused }) => {
         };
       }
       
+      // Get the emotions from the response
+      let emotions = undefined;
+      if (data.message && data.message.significant_emotions) {
+        emotions = data.message.significant_emotions;
+      } else if (data.current_significant_emotions) {
+        emotions = data.current_significant_emotions;
+      }
+      
       // Add AI response to state
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -165,18 +190,19 @@ const ChatArea: React.FC<ChatAreaProps> = ({ chatId, onClose, isFocused }) => {
         sender: 'ai',
         timestamp: new Date(),
         recommendations: recommendationsForUI,
-        significant_emotions: data.current_significant_emotions
+        significant_emotions: emotions
       };
       
       setMessages(prev => [...prev, aiMessage]);
       
-      // If we got a chat_id back and this was a new chat, update the URL
-      if (data.chat_id && (chatId === 'new' || !chatId)) {
+      // If we got a chat_id back and this was a new chat, update the state and URL
+      if (data.chatId && (currentChatId === 'new' || !currentChatId)) {
+        setCurrentChatId(data.chatId);
         // Update the URL to include the chat ID without reloading the page
         window.history.replaceState(
           {}, 
           '', 
-          `/chat/${data.chat_id}`
+          `/chat/${data.chatId}`
         );
       }
       
@@ -346,10 +372,10 @@ const ChatArea: React.FC<ChatAreaProps> = ({ chatId, onClose, isFocused }) => {
                   {formatTime(message.timestamp)}
                 </span>
               </div>
-              {message.sender === 'ai' && message.text.includes("AI service is temporarily unavailable") ? (
+              {message.sender === 'ai' && message.text && message.text.includes("AI service is temporarily unavailable") ? (
                 renderServiceUnavailable()
               ) : (
-                <p className="text-sm whitespace-pre-line">{message.text}</p>
+                <p className="text-sm whitespace-pre-line">{message.text || ''}</p>
               )}
               
               {/* Render recommendations if they exist */}
@@ -359,7 +385,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ chatId, onClose, isFocused }) => {
               
               {/* Render emotions if they exist */}
               {message.sender === 'ai' && message.significant_emotions && 
-                !message.text.includes("AI service is temporarily unavailable") && 
+                !message.text?.includes("AI service is temporarily unavailable") && 
                 renderEmotions(message.significant_emotions)
               }
             </div>
