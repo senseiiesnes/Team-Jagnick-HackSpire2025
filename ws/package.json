@@ -1,0 +1,23 @@
+{
+  "name": "mindmosaic-community-chat",
+  "version": "1.0.0",
+  "description": "WebSocket server for MindMosaic community chat",
+  "main": "ws.js",
+  "scripts": {
+    "start": "node ws.js",
+    "dev": "nodemon ws.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "private": true
+} 

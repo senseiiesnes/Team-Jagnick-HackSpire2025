@@ -1,4 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { 
+  initializeSocket,
+  joinCommunity, 
+  leaveCommunity, 
+  sendCommunityMessage, 
+  onCommunityMessage,
+  removeAllListeners
+} from '@/lib/socket';
 
 interface Message {
   id: string;
@@ -20,53 +28,52 @@ const CommunityChat: React.FC<CommunityChatProps> = ({ communityId, communityNam
   const [usernameSet, setUsernameSet] = useState(false);
   const messageEndRef = useRef<HTMLDivElement>(null);
 
-  // Demo messages for initial load
-  const demoMessages: Message[] = [
-    {
-      id: '1',
-      username: 'Mindful_User',
-      text: 'Has anyone tried the new guided meditation app?',
-      timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2) // 2 hours ago
-    },
-    {
-      id: '2',
-      username: 'SerenitySeeker',
-      text: 'Yes! I&apos;ve been using it for a week and it&apos;s really helping with my anxiety.',
-      timestamp: new Date(Date.now() - 1000 * 60 * 60 * 1.5) // 1.5 hours ago
-    },
-    {
-      id: '3',
-      username: 'Zen_Master',
-      text: 'I prefer the traditional approaches, but I&apos;m open to trying new apps. Which one are you talking about?',
-      timestamp: new Date(Date.now() - 1000 * 60 * 60 * 1) // 1 hour ago
-    },
-    {
-      id: '4',
-      username: 'Mindful_User',
-      text: 'It&apos;s called MindMosaic, actually! Has some really innovative features.',
-      timestamp: new Date(Date.now() - 1000 * 60 * 30) // 30 minutes ago
+  // Initialize socket connection
+  useEffect(() => {
+    const socket = initializeSocket();
+    
+    // Clean up on component unmount
+    return () => {
+      leaveCommunity(communityId);
+      removeAllListeners();
+    };
+  }, []);
+
+  // Join community when username is set
+  useEffect(() => {
+    if (usernameSet && username) {
+      joinCommunity(communityId);
     }
-  ];
+  }, [usernameSet, communityId, username]);
+
+  // Setup message listener
+  useEffect(() => {
+    onCommunityMessage((data) => {
+      const newMsg: Message = {
+        id: Date.now().toString(),
+        username: data.userId, // In a real app, you'd map the userId to a username
+        text: data.message,
+        timestamp: new Date(data.timestamp)
+      };
+      
+      setMessages(prev => [...prev, newMsg]);
+    });
+  }, []);
 
   // Scroll to bottom when messages update
   useEffect(() => {
     messageEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Load messages (would be from API in a real app)
-  useEffect(() => {
-    // This simulates loading messages from an API
-    // In a real app, you'd fetch messages based on the communityId
-    setTimeout(() => {
-      setMessages(demoMessages);
-    }, 500);
-  }, [communityId]);
-
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
     
     if (newMessage.trim() === '') return;
     
+    // Send message through WebSocket
+    sendCommunityMessage(communityId, newMessage);
+    
+    // Add message to local state (optimistic update)
     const message: Message = {
       id: Date.now().toString(),
       username,
