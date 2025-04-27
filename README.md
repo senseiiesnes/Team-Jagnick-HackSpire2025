@@ -1,10 +1,10 @@
-# MindMosaic2
+# MindMosaic
 
 A mental wellness application designed to provide resources, chat support, and informative content for mental health and well-being.
 
 ## Project Overview
 
-MindMosaic2 combines an interactive AI chat interface with a rich collection of mental wellness resources, organized in a beautiful and accessible user interface. The application uses an emotion-aware AI chatbot backed by a language model to provide personalized support and recommendations.
+MindMosaic combines an interactive AI chat interface with a rich collection of mental wellness resources, organized in a beautiful and accessible user interface. The application uses an emotion-aware AI chatbot backed by a language model to provide personalized support and recommendations.
 
 ## Features
 
