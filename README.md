@@ -1,178 +1,124 @@
 # MindMosaic
 
-A mental wellness application designed to provide resources, chat support, and informative content for mental health and well-being.
+A comprehensive mental wellness application designed to provide personalized resources, AI chat support, community connections, and informative content for mental health and well-being.
 
 ## Project Overview
 
-MindMosaic combines an interactive AI chat interface with a rich collection of mental wellness resources, organized in a beautiful and accessible user interface. The application uses an emotion-aware AI chatbot backed by a language model to provide personalized support and recommendations.
+MindMosaic combines an AI-powered chat interface with a rich collection of mental wellness resources, community connections, and blog content, all organized in a beautiful and accessible user interface. The application leverages modern technologies to make mental health information more accessible, personalized, and engaging.
 
 ## Features
 
-- **AI Chatbot**:
-  - Emotion detection from user messages
-  - Contextual responses based on detected emotions
-  - Personalized recommendations (books, movies, music) based on emotional state
-  - Conversation history saved in MongoDB
+### User Experience
+- **Responsive Design**: Fully responsive layout that adapts to all screen sizes from mobile to desktop
+- **Dark/Light Mode**: Complete theme support with consistent color schemes
+- **Intuitive Navigation**: Seamless transitions between different sections of the application
 
-- **User Interface**:
-  - Responsive design with dark mode support
-  - Chat sidebar showing previous conversations
-  - Emotion tag display for AI responses
-  - Recommendation cards for wellness resources
+### Core Functionality
+- **AI Chat Assistant**: Mood-aware AI chatbot that provides empathetic responses and personalized recommendations
+- **Mental Wellness Blog**: Curated articles from mental health professionals and wellness experts
+- **Community Connections**: Connect with others on similar wellness journeys (in development)
+- **User Authentication**: Secure registration and login with JWT-based authentication
+- **Personalized Experience**: Saved preferences and chat history for returning users
 
-- **Integration**:
-  - FastAPI Python backend for AI processing
-  - Next.js frontend with MongoDB storage
-  - NextAuth authentication
+## Technical Implementation
 
-## Technology Stack
+### Frontend (Next.js)
+- **Framework**: Next.js 14 with React 18 
+- **Styling**: Tailwind CSS with custom theme
+- **State Management**: React Hooks and Context API
+- **Authentication**: NextAuth.js integration with MongoDB
+- **UI Components**:
+  - TopBar: Smart navigation with responsive design
+  - Sidebar: Context-aware menu navigation
+  - ChatArea: Interactive AI chat interface
+  - BlogsArea: Featured mental wellness content
+  - Settings: User preference management
+  - Community: Connection with others (in development)
 
-### Frontend
-- Next.js & React
-- TypeScript
-- Tailwind CSS
-- NextAuth.js for authentication
-- MongoDB for data storage
+### Backend (Python)
+- **API**: FastAPI implementation
+- **AI Model**: Mistral-7B-Instruct for intelligent conversation
+- **Emotion Detection**: Advanced NLP for mood-aware responses
+- **Recommendation Engine**: Personalized suggestions for books, movies, and music
 
-### Backend
-- FastAPI (Python)
-- ctransformers (LLM inference)
-- Mistral-7B language model
-- Spotipy for music recommendations
-- MongoDB for chat history storage
+### Database
+- **Primary Database**: MongoDB Atlas
+- **Schema**: User profiles, chat history, preferences, blog content
+- **Authentication**: JWT token-based auth with secure password hashing
 
 ## Getting Started
 
 ### Prerequisites
-- Node.js (v16+)
-- Python (v3.8+)
-- MongoDB (local installation or MongoDB Atlas account)
-- Mistral-7B-Instruct-v0.3 model (optional)
+- Node.js 18+ and npm
+- Python 3.10+
+- MongoDB Atlas account
 
-### Installation and Setup
+### Frontend Setup
 
-#### 1. MongoDB Setup
+1. Clone the repository
+   ```
+   git clone https://github.com/yourusername/MindMosaic.git
+   ```
 
-Install MongoDB or use MongoDB Atlas, then create a database named `mindmosaic`.
+2. Navigate to the frontend directory
+   ```
+   cd MindMosaic/frontend
+   ```
 
-#### 2. Backend Setup
+3. Install dependencies
+   ```
+   npm install
+   ```
 
-Navigate to the backend directory and set up the environment:
+4. Create a `.env.local` file with the following variables:
+   ```
+   MONGODB_URI=your_mongodb_atlas_connection_string
+   NEXTAUTH_SECRET=your_nextauth_secret
+   NEXTAUTH_URL=http://localhost:3000
+   ```
 
-```bash
-cd backend
+5. Run the development server
+   ```
+   npm run dev
+   ```
 
-# Install dependencies
-pip install -r requirements.txt
+6. Access the application at http://localhost:3000
 
-# Create a .env file with your configuration
-```
+### Backend Setup
 
-Create a file named `.env` in the `/backend` directory with the following content:
+1. Navigate to the backend directory
+   ```
+   cd ../backend
+   ```
 
-```
-# Path to the LLM model
-MODEL_PATH=D:\path\to\your\model\Mistral-7B-Instruct-v0.3-Q4_K_M.gguf
+2. Install Python dependencies
+   ```
+   pip install -r requirements.txt
+   ```
 
-# API Keys for external services
-RAPIDAPI_KEY=your_rapidapi_key_here
+3. Create necessary environment variables (see backend documentation)
 
-# Spotify API credentials
-SPOTIFY_CLIENT_ID=your_spotify_client_id_here
-SPOTIFY_CLIENT_SECRET=your_spotify_client_secret_here
-```
+4. Run the backend server
+   ```
+   python main.py
+   ```
 
-Run the backend:
+## Project Status
 
-```bash
-python main.py
-```
+- ✅ **Frontend UI**: Complete with responsive design and theme support
+- ✅ **Backend API**: Functional with AI-powered chat capabilities
+- ✅ **Database Integration**: MongoDB Atlas connection established
+- ✅ **Authentication**: User registration and login implemented
+- ✅ **Blog Content**: Curated articles and content management
+- ✅ **Community Features**: Completed
 
-The backend will be available at http://localhost:8000
+## Future Development
 
-#### 3. Frontend Setup
-
-Navigate to the frontend directory:
-
-```bash
-cd frontend
-
-# Install dependencies
-npm install
-```
-
-Create a `.env.local` file in the frontend directory:
-
-```
-# MongoDB Connection String
-MONGODB_URI=mongodb://localhost:27017/mindmosaic
-
-# NextAuth Secret (replace with a secure random string in production)
-NEXTAUTH_SECRET=mysecret
-NEXTAUTH_URL=http://localhost:3000
-
-# FastAPI Backend URL
-NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
-```
-
-Start the frontend development server:
-
-```bash
-npm run dev
-```
-
-The application will be available at http://localhost:3000
-
-## Using the Application
-
-1. Register or log in to the application
-2. Navigate to the AI Chat section
-3. Start a new conversation with the AI chatbot
-4. Previous chats will be displayed in the sidebar
-5. When a conversation ends, you'll receive personalized recommendations
-
-## Implementation Details
-
-### AI Chatbot Backend
-
-The backend uses a Mistral-7B language model to:
-- Detect emotions in user messages
-- Generate contextual responses
-- Provide personalized recommendations
-
-If the LLM model is not available, a MockLLM implementation will be used as a fallback.
-
-### Backend-Frontend Integration
-
-The integration works as follows:
-
-1. When a user sends a message from the frontend, it's sent to the Next.js API endpoint `/api/chat`
-2. The Next.js API:
-   - Stores the user message in MongoDB
-   - Forwards the message to the FastAPI backend
-   - Receives the AI response with emotions analysis and recommendations
-   - Stores the AI response in MongoDB
-   - Returns the response to the frontend
-
-3. Chat history is stored in MongoDB with emotions and recommendations
-
-## Troubleshooting
-
-### Backend Model Issues
-
-If you encounter 503 Service Unavailable errors, it may be due to LLM initialization problems:
-
-1. Check your `.env` file has the correct MODEL_PATH pointing to your LLM model
-2. The model file can be downloaded from [Hugging Face](https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.3-GGUF/tree/main)
-3. Ensure you have sufficient RAM for the model
-4. The backend includes a fallback MockLLM if model loading fails
-
-### Connection Issues
-
-- **Backend connection errors**: Ensure the FastAPI backend is running and NEXT_PUBLIC_BACKEND_URL is correct
-- **MongoDB connection issues**: Verify your MongoDB connection string in the .env.local file
-- **Chat history not loading**: Check that you're authenticated and MongoDB is accessible
+- Enhanced personalization based on user interaction
+- 1-1 Connect Integration with WebRTC
+- Mobile application with push notifications
+- Additional wellness tools and resources
 
 ---
 
-*MindMosaic2 is committed to creating accessible mental wellness resources and support.* 
+*MindMosaic is committed to creating accessible mental wellness resources and support for everyone.*
